@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/conversor_fopag_digital.html" },
+    { "source": "/tutorial", "destination": "/Tutorial_Importar_Planilha_BBDigitalPJ.html" }
+  ]
+}

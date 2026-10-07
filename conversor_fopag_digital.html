@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#001489" />
+  <title>Conversor PDF Folha → Planilha BB</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       RAZÃO AZUL — Design System (adaptado do projeto Integração Financeira)
+       ========================================================================== */
+
+    @font-face { font-family:'BB Textos'; src:url('assets/fonts/BANCODOBRASILTEXTOS-REGULAR.TTF') format('truetype'); font-weight:400; font-display:swap; }
+    @font-face { font-family:'BB Textos'; src:url('assets/fonts/BANCODOBRASILTEXTOS-MEDIUM.TTF')  format('truetype'); font-weight:500; font-display:swap; }
+    @font-face { font-family:'BB Textos'; src:url('assets/fonts/BANCODOBRASILTEXTOS-BOLD.TTF')    format('truetype'); font-weight:700; font-display:swap; }
+    @font-face { font-family:'BB Textos'; src:url('assets/fonts/BANCODOBRASILTEXTOS-XBOLD.TTF')   format('truetype'); font-weight:800; font-display:swap; }
+    @font-face { font-family:'BB Titulos'; src:url('assets/fonts/BANCODOBRASILTITULOS-BOLD.TTF')  format('truetype'); font-weight:700; font-display:swap; }
+    @font-face { font-family:'BB Titulos'; src:url('assets/fonts/BANCODOBRASILTITULOS-XBOLD.TTF') format('truetype'); font-weight:800; font-display:swap; }
+
+    :root {
+      --ink:       #365eff;
+      --ink-2:     #001489;
+      --ink-3:     #4a6bff;
+      --blue:      #465eff;
+      --accent:    #a3aeff;
+      --gold:      #fcfc30;
+
+      --paper:     #f4f6ff;
+      --paper-2:   #e9edfc;
+      --paper-ink: #101540;
+      --paper-mid: #3e4676;
+      --paper-mut: #5b6187;
+      --paper-rule:#d9deef;
+
+      --text:  #ffffff;
+      --muted: #f4f6ff;
+      --faint: #f4f6ff;
+      --label-c: #f4f6ff;
+
+      --rule:   rgba(255,255,255,.22);
+      --rule-2: rgba(255,255,255,.38);
+
+      --ok:   #3ddba4;
+      --warn: #ffc043;
+      --alert:#ff8494;
+
+      --r-sm: 6px;
+      --r:    10px;
+      --r-lg: 18px;
+      --shell: 1180px;
+
+      --f-display:'BB Titulos','BB Textos',Georgia,serif;
+      --f-body:   'BB Textos','Segoe UI',system-ui,sans-serif;
+      --f-data:   'IBM Plex Mono',ui-monospace,'Cascadia Mono','Segoe UI Mono',Consolas,monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      background-color: var(--ink);
+      color: var(--text);
+      font-family: var(--f-body);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Filetes de coluna — o chão de razão */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(90deg, rgba(0,10,80,.10) 0 1px, transparent 1px 100%),
+        linear-gradient(180deg, var(--ink-3) 0, rgba(74,107,255,0) 680px);
+      background-size: 68px 100%, 100% 100%;
+    }
+    body > * { position: relative; z-index: 1; }
+
+    img, svg { max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { background: none; border: none; cursor: pointer; }
+
+    :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 3px; }
+    [hidden] { display: none !important; }
+
+    /* --------------------------------------------------------------------
+       Tipografia
+       -------------------------------------------------------------------- */
+    .label {
+      font-family: var(--f-data); font-size: .68rem; font-weight: 500;
+      letter-spacing: .16em; text-transform: uppercase; color: var(--label-c);
+    }
+    .label-gold { color: var(--gold); }
+
+    .display {
+      font-family: var(--f-display); font-weight: 800;
+      font-size: clamp(1.9rem, 4.4vw, 2.7rem);
+      line-height: 1.08; letter-spacing: -.03em; color: #fff;
+    }
+    .display em { font-style: normal; color: var(--gold); }
+
+    .lead { font-size: clamp(.95rem, 1.3vw, 1.05rem); color: var(--muted); max-width: 58ch; line-height: 1.65; }
+    .tiny { font-size: .78rem; color: var(--faint); line-height: 1.5; }
+
+    .on-paper { color: var(--paper-ink); }
+    .on-paper .muted { color: var(--paper-mut); }
+
+    /* Dentro de superfícies escuras o acento lavanda reaparece */
+    .topbar, .status, .pill { --muted: #c3ccf5; --faint: #a9b5ee; --label-c: var(--accent); }
+
+    /* --------------------------------------------------------------------
+       Cabeçalho
+       -------------------------------------------------------------------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(0,11,77,.86);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--rule);
+    }
+    .topbar-in {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      max-width: var(--shell); margin: 0 auto;
+      padding: 16px clamp(16px, 4vw, 32px);
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { height: 28px; width: auto; display: block; flex: none; }
+    .topbar-title { display: flex; flex-direction: column; gap: 3px; padding-left: 12px; border-left: 1px solid var(--rule); }
+    .topbar-title strong {
+      font-family: var(--f-display); font-size: .92rem; font-weight: 700;
+      color: #fff; letter-spacing: -.01em;
+    }
+    .topbar-flag {
+      margin-left: auto;
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid currentColor; border-radius: 999px;
+      padding: 6px 13px; color: var(--ok);
+      background: rgba(0,11,77,.72);
+      font-family: var(--f-data); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .topbar-flag i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+
+    /* --------------------------------------------------------------------
+       Hero
+       -------------------------------------------------------------------- */
+    .hero {
+      max-width: var(--shell); margin: 0 auto;
+      padding: clamp(16px, 4vw, 26px) clamp(16px, 4vw, 32px) clamp(28px, 4vw, 40px);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* --------------------------------------------------------------------
+       Placa de papel — o conversor
+       -------------------------------------------------------------------- */
+    .plate {
+      max-width: var(--shell); margin: 0 auto clamp(32px, 5vw, 48px);
+      background: var(--paper);
+      border-radius: var(--r-lg);
+      box-shadow: 0 26px 60px rgba(0,5,45,.42);
+      overflow: hidden;
+    }
+    .plate-head {
+      padding: 16px clamp(18px, 3vw, 28px);
+      background: var(--paper-2);
+      border-bottom: 1px solid var(--paper-rule);
+    }
+    .plate-head .label { color: #2b3ecc; }
+    .plate-body { padding: clamp(20px, 3vw, 30px); display: flex; flex-direction: column; gap: 22px; }
+
+    @keyframes settle { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .settle { animation: settle .5s cubic-bezier(.2,.8,.3,1) backwards; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    }
+
+    /* --------------------------------------------------------------------
+       Campo + input
+       -------------------------------------------------------------------- */
+    .field { display: flex; flex-direction: column; gap: 7px; max-width: 360px; }
+    .field > .label { color: var(--paper-mut); }
+    .input {
+      width: 100%; padding: 11px 13px;
+      border: 1px solid var(--paper-rule); border-radius: var(--r-sm);
+      background: #fff; color: var(--paper-ink); font-size: .92rem;
+      transition: border-color .16s, box-shadow .16s;
+    }
+    .input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(70,94,255,.16); }
+    select.input { cursor: pointer; }
+
+    /* --------------------------------------------------------------------
+       Zona de upload
+       -------------------------------------------------------------------- */
+    .dropzone {
+      border: 2px dashed var(--paper-rule);
+      border-radius: var(--r-lg);
+      padding: clamp(26px, 5vw, 38px) 22px;
+      text-align: center;
+      background: #fff;
+      transition: border-color .18s, background-color .18s, opacity .18s;
+    }
+    .dropzone p { margin: 0 0 8px; color: var(--paper-mid); }
+    .dropzone strong { font-family: var(--f-display); font-weight: 700; color: var(--paper-ink); }
+    .dropzone .muted { display: block; margin-bottom: 16px; }
+    .dropzone.drag { border-color: var(--blue); background: #eef1ff; }
+    .dropzone.disabled { opacity: .5; }
+    .dropzone input { display: none; }
+
+    /* --------------------------------------------------------------------
+       Botões
+       -------------------------------------------------------------------- */
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      min-height: 46px; padding: 0 20px;
+      border-radius: var(--r-sm);
+      font-family: var(--f-data); font-size: .78rem; font-weight: 500;
+      letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
+      border: 1px solid transparent;
+      transition: background-color .18s, color .18s, border-color .18s, transform .18s;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn-gold  { background: var(--gold); color: var(--ink); font-weight: 600; }
+    .btn-gold:hover:not(:disabled)  { background: #fff; }
+    .btn-solid { background: var(--blue); color: #fff; }
+    .btn-solid:hover:not(:disabled) { background: #6c80ff; }
+    .btn-ghost { border-color: var(--paper-rule); color: var(--paper-mid); }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+    .btn-sm { min-height: 38px; padding: 0 15px; font-size: .7rem; }
+
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; }
+    .pagination .label { color: var(--paper-mut); }
+
+    /* --------------------------------------------------------------------
+       Nota
+       -------------------------------------------------------------------- */
+    .note {
+      display: flex; gap: 12px; align-items: flex-start;
+      border-left: 2px solid #d9c400;
+      background: #fdfbe0;
+      border-radius: 0 var(--r) var(--r) 0;
+      padding: 14px 16px;
+      color: var(--paper-mid);
+      font-size: .86rem; line-height: 1.55;
+    }
+    .note strong { color: var(--paper-ink); }
+
+    /* --------------------------------------------------------------------
+       Status
+       -------------------------------------------------------------------- */
+    .status {
+      border-left: 3px solid #c7cffb;
+      background: #e8ebff;
+      color: #2b3ecc;
+      border-radius: 0 var(--r) var(--r) 0;
+      padding: 14px 16px;
+      font-size: .875rem; line-height: 1.55;
+      white-space: pre-wrap;
+      transition: border-color .15s, background-color .15s, color .15s;
+    }
+    .status.ok   { border-left-color: #b6e6d3; background: #e2f7ee; color: #0f7a55; }
+    .status.warn { border-left-color: #f0dcae; background: #fdf3dc; color: #8a5a00; }
+    .status.err  { border-left-color: #f3c6cf; background: #fdeaee; color: #a52036; }
+
+    /* --------------------------------------------------------------------
+       Métricas
+       -------------------------------------------------------------------- */
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+    .stat {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 14px 16px;
+      border: 1px solid var(--paper-rule); border-left: 2px solid var(--paper-rule);
+      border-radius: var(--r-sm);
+      background: #fff;
+    }
+    .stat-v {
+      font-family: var(--f-data); font-size: 1.28rem; font-weight: 600;
+      color: var(--paper-ink); font-variant-numeric: tabular-nums;
+      letter-spacing: -.02em; overflow-wrap: anywhere;
+    }
+    .stat .label  { color: #2b3ecc; }
+    .stat.is-ok   { border-left-color: #17a373; }
+    .stat.is-warn { border-left-color: #e0a300; }
+    .stat.is-blue { border-left-color: var(--blue); }
+    @media (max-width: 620px) { .stats { grid-template-columns: 1fr 1fr; } }
+
+    /* --------------------------------------------------------------------
+       Tabela de papel (ledger)
+       -------------------------------------------------------------------- */
+    .table-scroll {
+      overflow: auto;
+      border: 1px solid var(--paper-rule); border-radius: var(--r);
+      max-height: 520px;
+    }
+    .ledger { width: 100%; border-collapse: collapse; font-size: .85rem; min-width: 900px; }
+    .ledger thead th {
+      position: sticky; top: 0; z-index: 1;
+      font-family: var(--f-data); font-size: .64rem; font-weight: 600;
+      letter-spacing: .12em; text-transform: uppercase; color: var(--paper-mut);
+      text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--paper-rule);
+      background: var(--paper-2); white-space: nowrap;
+    }
+    .ledger tbody td {
+      padding: 11px 14px; border-bottom: 1px solid var(--paper-rule);
+      color: var(--paper-mid); vertical-align: top;
+      white-space: nowrap;
+    }
+    .ledger tbody tr:hover { background: #eef1ff; }
+    .ledger tbody td:nth-child(2),
+    .ledger tbody td:nth-child(3),
+    .ledger tbody td:nth-child(4) {
+      font-family: var(--f-data); font-variant-numeric: tabular-nums; color: var(--paper-ink);
+    }
+    .ledger td.valor {
+      text-align: right; font-family: var(--f-data);
+      font-variant-numeric: tabular-nums; font-weight: 600; color: var(--paper-ink);
+    }
+
+    .muted { color: var(--paper-mut); font-size: .8rem; }
+
+    /* --------------------------------------------------------------------
+       Diagnóstico
+       -------------------------------------------------------------------- */
+    summary {
+      cursor: pointer; font-family: var(--f-data); font-size: .78rem;
+      letter-spacing: .06em; color: #2b3ecc; padding: 6px 0;
+    }
+    summary:hover { color: var(--blue); }
+    pre {
+      margin-top: 10px;
+      background: var(--paper-2); color: var(--paper-mid);
+      border: 1px solid var(--paper-rule);
+      padding: 14px; border-radius: var(--r-sm);
+      max-height: 300px; overflow: auto;
+      white-space: pre-wrap;
+      font-family: var(--f-data); font-size: .74rem; line-height: 1.5;
+    }
+
+    .foot-note {
+      display: flex; flex-direction: column; gap: 6px;
+      text-align: center; max-width: var(--shell); margin: 0 auto 40px; padding: 0 clamp(16px,4vw,32px);
+    }
+    .credits strong { color: var(--text); font-weight: 600; }
+    .foot-link a { color: var(--accent); border-bottom: 1px solid transparent; transition: color .16s, border-color .16s; }
+    .foot-link a:hover { color: var(--gold); border-color: var(--gold); }
+
+    /* --------------------------------------------------------------------
+       Responsivo
+       -------------------------------------------------------------------- */
+    @media (max-width: 640px) {
+      .topbar-flag { margin-left: 0; }
+      .actions .btn { width: 100%; }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="topbar-in">
+      <div class="topbar-brand">
+        <svg class="brand-mark" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+          <path fill="#fff200" fill-rule="evenodd" d="M0,430.53l52.09-34.72,52.08,34.72L0,500Zm500-361-52.09,34.71L395.84,69.48,500,0V69.48Zm0,263.85L250,500,0,333.33,296.88,135.44,349,170.15,109.39,329.85l145.82,97.21,67.7-45.14-52.07-34.7,125-83.33ZM0,166.69,250,0,500,166.69,203.12,364.58l-52.07-34.73,239.56-159.7L244.79,73l-67.7,45.13,52.08,34.71-125,83.33Z"/>
+        </svg>
+        <span class="topbar-title">
+          <span class="label label-gold">Banco do Brasil</span>
+          <strong>Conversor de folha para planilha</strong>
+        </span>
+      </div>
+      <span class="topbar-flag"><i></i>Processamento local</span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <span class="label label-gold">Folha de pagamento → Excel</span>
+    <h1 class="display">PDF da folha, direto para a planilha do <em>Banco do Brasil</em>.</h1>
+    <p class="lead">
+      Selecione a origem do relatório, solte o PDF abaixo e confira cada funcionário na tela
+      antes de gerar a planilha. O Excel final leva apenas CPF, agência com DV, conta com DV e valor.
+    </p>
+  </section>
+
+  <main class="plate on-paper settle">
+    <div class="plate-head">
+      <span class="label">Conversor PDF → XLSX</span>
+    </div>
+
+    <div class="plate-body">
+      <div class="field">
+        <label class="label" for="tipoArquivo">Tipo do arquivo</label>
+        <select id="tipoArquivo" class="input">
+          <option value="">Selecione...</option>
+          <option value="bbgestaomax">Arquivo BBGestaoMax</option>
+          <option value="fortes">Arquivo Fortes</option>
+        </select>
+      </div>
+
+      <div id="drop" class="dropzone disabled">
+        <p><strong>Arraste o PDF aqui</strong> ou selecione o arquivo.</p>
+        <p id="layoutHelp" class="muted">Selecione primeiro o tipo do arquivo.</p>
+        <label id="selectLabel" class="btn btn-solid" for="pdfInput">Selecionar PDF</label>
+        <input id="pdfInput" type="file" accept="application/pdf,.pdf" disabled />
+      </div>
+
+      <div class="actions">
+        <button id="xlsxBtn" class="btn btn-gold" disabled>Gerar planilha XLSX</button>
+        <button id="clearBtn" class="btn btn-ghost" disabled>Limpar</button>
+      </div>
+
+      <div class="note">
+        <span>
+          <strong>Prévia:</strong> a tela mostra o nome do funcionário para conferência.
+          <strong>Planilha:</strong> o arquivo XLSX não inclui a coluna Nome.
+        </span>
+      </div>
+
+      <div id="status" class="status">Selecione o tipo do arquivo para começar.</div>
+
+      <div id="summary" class="stats" hidden>
+        <div class="stat is-blue">
+          <span class="label">Registros encontrados</span>
+          <span id="count" class="stat-v">0</span>
+        </div>
+        <div class="stat is-ok">
+          <span class="label">Total</span>
+          <span id="total" class="stat-v">R$ 0,00</span>
+        </div>
+        <div class="stat is-blue">
+          <span class="label">Tipo</span>
+          <span id="tipoResumo" class="stat-v">-</span>
+        </div>
+        <div class="stat is-warn">
+          <span class="label">Não reconhecidos</span>
+          <span id="unmatchedCount" class="stat-v">0</span>
+        </div>
+      </div>
+
+      <div id="tableWrap" class="table-scroll" hidden>
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>Nome do funcionário</th>
+              <th>CPF</th>
+              <th>Agência com DV</th>
+              <th>Conta com DV</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div id="pagination" class="pagination" hidden>
+        <button id="prevPageBtn" class="btn btn-ghost btn-sm" type="button">← Anterior</button>
+        <span id="pageInfo" class="label">Página 1 de 1</span>
+        <button id="nextPageBtn" class="btn btn-ghost btn-sm" type="button">Próxima →</button>
+      </div>
+
+      <details id="details" hidden>
+        <summary>Ver diagnóstico das linhas não reconhecidas</summary>
+        <pre id="debug"></pre>
+      </details>
+    </div>
+  </main>
+
+  <footer class="foot-note">
+    <p class="tiny">Processamento local · nenhum arquivo é enviado a servidores.</p>
+    <p class="tiny foot-link"><a href="Tutorial_Importar_Planilha_BBDigitalPJ.html">Como importar a planilha no BB Digital PJ →</a></p>
+    <p class="tiny credits">Made with 💗 by <strong>Paulo Muniz</strong></p>
+  </footer>
+
+<script type="module">
+  import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs";
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
+
+  const tipoArquivo = document.getElementById("tipoArquivo");
+  const drop = document.getElementById("drop");
+  const input = document.getElementById("pdfInput");
+  const layoutHelp = document.getElementById("layoutHelp");
+  const status = document.getElementById("status");
+  const xlsxBtn = document.getElementById("xlsxBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const tbody = document.getElementById("tbody");
+  const summary = document.getElementById("summary");
+  const tableWrap = document.getElementById("tableWrap");
+  const countEl = document.getElementById("count");
+  const totalEl = document.getElementById("total");
+  const tipoResumo = document.getElementById("tipoResumo");
+  const unmatchedCountEl = document.getElementById("unmatchedCount");
+  const details = document.getElementById("details");
+  const debug = document.getElementById("debug");
+  const pagination = document.getElementById("pagination");
+  const prevPageBtn = document.getElementById("prevPageBtn");
+  const nextPageBtn = document.getElementById("nextPageBtn");
+  const pageInfo = document.getElementById("pageInfo");
+
+  const ITENS_POR_PAGINA = 50;
+
+  let dados = [];
+  let arquivoAtual = null;
+  let naoReconhecidasAtuais = [];
+  let paginaAtual = 1;
+
+  function setStatus(texto, classe = "") {
+    status.className = "status" + (classe ? " " + classe : "");
+    status.textContent = texto;
+  }
+
+  function normalizeSpaces(s) {
+    return String(s ?? "")
+      .replace(/\u00A0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function parseBRL(s) {
+    const t = normalizeSpaces(s).replace(/^R\$\s*/i, "");
+    const n = Number(t.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatBRL(n) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL"
+    }).format(n || 0);
+  }
+
+  function sanitizeFileName(s) {
+    return String(s || "planilha")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  // Ag\u00eancia: formato 9999-X, removendo zeros \u00e0 esquerda mas mantendo
+  // no m\u00ednimo 4 d\u00edgitos (ex.: 00528-2 -> 0528-2).
+  function normalizarAgencia(valor) {
+    const m = String(valor).match(/^([\d.]+)-([0-9Xx])$/);
+    if (!m) return String(valor).toUpperCase();
+
+    let num = m[1].replace(/\./g, "").replace(/^0+/, "");
+    if (num === "") num = "0";
+    if (num.length < 4) num = num.padStart(4, "0");
+
+    return num + "-" + m[2].toUpperCase();
+  }
+
+  // Conta: remove todos os zeros \u00e0 esquerda (ex.: 0000017516-4 -> 17516-4).
+  function normalizarConta(valor) {
+    const m = String(valor).match(/^([\d.]+)-([0-9Xx])$/);
+    if (!m) return String(valor).toUpperCase();
+
+    let num = m[1].replace(/\./g, "").replace(/^0+/, "");
+    if (num === "") num = "0";
+
+    return num + "-" + m[2].toUpperCase();
+  }
+
+  function itemsToLines(items) {
+    const grupos = [];
+    const toleranciaY = 2.6;
+
+    const visiveis = items
+      .filter(i => normalizeSpaces(i.str))
+      .map(i => ({
+        text: normalizeSpaces(i.str),
+        x: i.transform[4],
+        y: i.transform[5],
+        w: i.width || 0
+      }))
+      .sort((a, b) => {
+        const dy = b.y - a.y;
+        if (Math.abs(dy) > toleranciaY) return dy;
+        return a.x - b.x;
+      });
+
+    for (const item of visiveis) {
+      let grupo = grupos.find(g => Math.abs(g.y - item.y) <= toleranciaY);
+      if (!grupo) {
+        grupo = { y: item.y, items: [] };
+        grupos.push(grupo);
+      }
+      grupo.items.push(item);
+    }
+
+    return grupos
+      .sort((a, b) => b.y - a.y)
+      .map(g => {
+        const sorted = g.items.sort((a, b) => a.x - b.x);
+        return {
+          y: g.y,
+          text: normalizeSpaces(sorted.map(i => i.text).join(" ")),
+          items: sorted
+        };
+      });
+  }
+
+  // ============================================================
+  // BB GESTAOMAX
+  // ============================================================
+
+  function parseBBGestaoMaxLine(line) {
+    const re =
+      /^(.*?)\s+(\d{3}\.\d{3}\.\d{3}-\d{2})\s+(\d{3})\s+(\d{1,6}-[0-9Xx])\s+([\d.]+-[0-9Xx])\s+([\d.]+,\d{2})$/;
+
+    const m = normalizeSpaces(line).match(re);
+    if (!m) return null;
+
+    const valor = parseBRL(m[6]);
+    if (valor === null) return null;
+
+    return {
+      nome: normalizeSpaces(m[1]),
+      cpf: m[2],
+      agencia: normalizarAgencia(m[4]),
+      conta: normalizarConta(m[5]),
+      valor
+    };
+  }
+
+  function parseBBGestaoMaxItems(items) {
+    const texts = items.map(i => i.text);
+    const cpfIndex = texts.findIndex(t => /^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(t));
+    if (cpfIndex < 1) return null;
+
+    const nome = normalizeSpaces(texts.slice(0, cpfIndex).join(" "));
+    const cpf = texts[cpfIndex];
+
+    const after = texts
+      .slice(cpfIndex + 1)
+      .map(normalizeSpaces)
+      .filter(Boolean);
+
+    const instIndex = after.findIndex(t => /^\d{3}$/.test(t));
+    if (instIndex < 0) return null;
+
+    const agencia = after
+      .slice(instIndex + 1)
+      .find(t => /^\d{1,6}-[0-9Xx]$/.test(t));
+
+    const conta = after
+      .slice(instIndex + 1)
+      .find(t => /^[\d.]+-[0-9Xx]$/.test(t));
+
+    const valorTxt = [...after]
+      .reverse()
+      .find(t => /^[\d.]+,\d{2}$/.test(t));
+
+    if (!nome || !cpf || !agencia || !conta || !valorTxt) return null;
+
+    const valor = parseBRL(valorTxt);
+    if (valor === null) return null;
+
+    return {
+      nome,
+      cpf,
+      agencia: normalizarAgencia(agencia),
+      conta: normalizarConta(conta),
+      valor
+    };
+  }
+
+  // ============================================================
+  // FORTES
+  // Layout:
+  // Código | Nome | Agência | Conta | Tipo | CPF | Lotação | Líquido
+  // ============================================================
+
+  function normalizaTrechoFortes(s) {
+    let t = normalizeSpaces(s);
+
+    // Casos extraídos como "528 2-" significam "528-2".
+    // Também cobre "508 8-".
+    t = t.replace(
+      /(^|[^\d])(\d{1,6})\s+([0-9Xx])-/g,
+      (_, prefixo, numero, dv) => prefixo + numero + "-" + dv
+    );
+
+    // Casos como "1611 -X" ou "25116 -X".
+    t = t.replace(
+      /(\d{1,12})\s+-\s*([0-9Xx])/g,
+      "$1-$2"
+    );
+
+    return normalizeSpaces(t);
+  }
+
+  function parseFortesLine(line) {
+    const texto = normalizeSpaces(line);
+
+    const cpfMatch = texto.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/);
+    const valorMatch = texto.match(/(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/);
+
+    if (!cpfMatch || !valorMatch) return null;
+
+    const cpf = cpfMatch[0];
+    const valor = parseBRL(valorMatch[1]);
+    if (valor === null) return null;
+
+    let esquerda = texto.slice(0, cpfMatch.index).trim();
+    esquerda = normalizaTrechoFortes(esquerda);
+
+    // Código do empregado: 6 dígitos.
+    const codigoMatch = esquerda.match(/^(\d{6})\s+(.*)$/);
+    if (!codigoMatch) return null;
+
+    let restante = normalizaTrechoFortes(codigoMatch[2]);
+
+    // Tipo imediatamente antes do CPF.
+    const tipoMatch = restante.match(/\s+(CS|CC|P)\s*$/);
+    if (!tipoMatch) return null;
+
+    let antesTipo = restante.slice(0, tipoMatch.index).trim();
+
+    // Conta é o último número-DV antes do Tipo.
+    const contaMatch = antesTipo.match(/(\d{1,12})-([0-9Xx])\s*$/);
+    if (!contaMatch) return null;
+
+    const conta =
+      normalizarConta(contaMatch[1] + "-" + contaMatch[2].toUpperCase());
+
+    let antesConta =
+      antesTipo.slice(0, contaMatch.index).trim();
+
+    // Agência é o último número-DV antes da Conta.
+    // Pode estar colada ao final do nome no PDF do Fortes.
+    const agenciaMatch =
+      antesConta.match(/(\d{1,6})-([0-9Xx])\s*$/);
+
+    if (!agenciaMatch) return null;
+
+    const agencia =
+      normalizarAgencia(agenciaMatch[1] + "-" + agenciaMatch[2].toUpperCase());
+
+    const nome =
+      normalizeSpaces(
+        antesConta.slice(0, agenciaMatch.index)
+      );
+
+    if (!nome) return null;
+
+    return {
+      nome,
+      cpf,
+      agencia,
+      conta,
+      valor
+    };
+  }
+
+  // ============================================================
+  // PROCESSAMENTO
+  // ============================================================
+
+  async function processarPDF(file) {
+    const tipo = tipoArquivo.value;
+
+    if (!tipo) {
+      setStatus("Selecione o tipo do arquivo antes do upload.", "warn");
+      return;
+    }
+
+    arquivoAtual = file;
+    dados = [];
+    naoReconhecidasAtuais = [];
+    tbody.innerHTML = "";
+    summary.hidden = true;
+    tableWrap.hidden = true;
+    details.hidden = true;
+    xlsxBtn.disabled = true;
+    clearBtn.disabled = false;
+
+    setStatus(`Lendo "${file.name}"...`);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+      const encontrados = [];
+      const naoReconhecidas = [];
+
+      let esperadoFortesQtd = null;
+      let esperadoFortesTotal = null;
+
+      for (let p = 1; p <= pdf.numPages; p++) {
+        setStatus(`Lendo página ${p} de ${pdf.numPages}...`);
+
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const lines = itemsToLines(content.items);
+
+        for (const line of lines) {
+          if (tipo === "bbgestaomax") {
+            if (!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(line.text)) continue;
+
+            let row = parseBBGestaoMaxLine(line.text);
+
+            if (!row) {
+              row = parseBBGestaoMaxItems(line.items);
+            }
+
+            if (row) {
+              row.pagina = p;
+              encontrados.push(row);
+            } else {
+              naoReconhecidas.push({
+                pagina: p,
+                texto: line.text
+              });
+            }
+          }
+
+          if (tipo === "fortes") {
+            const totalGeral =
+              line.text.match(
+                /Total\s+Geral\s+\((\d+)\s+empregados\)\s+([\d.]+,\d{2})/i
+              );
+
+            if (totalGeral) {
+              esperadoFortesQtd = Number(totalGeral[1]);
+              esperadoFortesTotal = parseBRL(totalGeral[2]);
+            }
+
+            if (!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(line.text)) continue;
+
+            const row = parseFortesLine(line.text);
+
+            if (row) {
+              row.pagina = p;
+              encontrados.push(row);
+            } else {
+              naoReconhecidas.push({
+                pagina: p,
+                texto: line.text
+              });
+            }
+          }
+        }
+      }
+
+      // Remove duplicidade exata causada pela leitura de tabelas/páginas.
+      const mapa = new Map();
+
+      for (const r of encontrados) {
+        const key =
+          `${r.nome}|${r.cpf}|${r.agencia}|${r.conta}|${r.valor}`;
+
+        if (!mapa.has(key)) {
+          mapa.set(key, r);
+        }
+      }
+
+      dados = [...mapa.values()];
+      naoReconhecidasAtuais = naoReconhecidas;
+
+      render(dados, naoReconhecidas, tipo);
+
+      if (dados.length === 0) {
+        setStatus(
+          "Nenhum registro foi reconhecido. Confira se o tipo selecionado corresponde ao PDF enviado.",
+          "err"
+        );
+
+        details.hidden = false;
+        debug.textContent =
+          naoReconhecidas
+            .map(r => `Página ${r.pagina}: ${r.texto}`)
+            .join("\n") ||
+          "Nenhuma linha de funcionário foi localizada.";
+
+        return;
+      }
+
+      const total = dados.reduce((acc, r) => acc + r.valor, 0);
+
+      let mensagem =
+        `${dados.length} registro(s) extraído(s). Total: ${formatBRL(total)}.`;
+
+      let classe = naoReconhecidas.length ? "warn" : "ok";
+
+      if (tipo === "fortes" &&
+          esperadoFortesQtd !== null &&
+          esperadoFortesTotal !== null) {
+
+        const qtdOk = dados.length === esperadoFortesQtd;
+        const totalOk =
+          Math.abs(total - esperadoFortesTotal) < 0.01;
+
+        if (qtdOk && totalOk) {
+          mensagem +=
+            ` Conferência Fortes OK: quantidade e total batem com o rodapé (${esperadoFortesQtd} empregados / ${formatBRL(esperadoFortesTotal)}).`;
+        } else {
+          mensagem +=
+            ` ATENÇÃO: o rodapé informa ${esperadoFortesQtd} empregados / ${formatBRL(esperadoFortesTotal)}, mas a extração resultou em ${dados.length} / ${formatBRL(total)}.`;
+          classe = "warn";
+        }
+      }
+
+      if (naoReconhecidas.length) {
+        mensagem +=
+          ` ${naoReconhecidas.length} linha(s) com CPF não foram reconhecidas.`;
+      }
+
+      setStatus(mensagem, classe);
+
+      if (naoReconhecidas.length) {
+        details.hidden = false;
+        debug.textContent =
+          naoReconhecidas
+            .map(r => `Página ${r.pagina}: ${r.texto}`)
+            .join("\n");
+      }
+
+      xlsxBtn.disabled = false;
+
+    } catch (err) {
+      console.error(err);
+
+      setStatus(
+        "Erro ao processar o PDF:\n" +
+        (err?.message || String(err)),
+        "err"
+      );
+    }
+  }
+
+  function renderPaginaTabela() {
+    tbody.innerHTML = "";
+
+    const totalPaginas = Math.max(1, Math.ceil(dados.length / ITENS_POR_PAGINA));
+    if (paginaAtual > totalPaginas) paginaAtual = totalPaginas;
+    if (paginaAtual < 1) paginaAtual = 1;
+
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    const paginaRows = dados.slice(inicio, inicio + ITENS_POR_PAGINA);
+
+    for (const r of paginaRows) {
+      const tr = document.createElement("tr");
+
+      const vals = [
+        r.nome,
+        r.cpf,
+        r.agencia,
+        r.conta,
+        formatBRL(r.valor).replace("R$", "").trim()
+      ];
+
+      vals.forEach((v, idx) => {
+        const td = document.createElement("td");
+        td.textContent = v;
+
+        if (idx === 4) {
+          td.className = "valor";
+        }
+
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
+    }
+
+    pageInfo.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+    prevPageBtn.disabled = paginaAtual <= 1;
+    nextPageBtn.disabled = paginaAtual >= totalPaginas;
+    pagination.hidden = dados.length === 0 || totalPaginas <= 1;
+  }
+
+  function render(rows, unmatched, tipo) {
+    const total = rows.reduce((acc, r) => acc + r.valor, 0);
+
+    countEl.textContent =
+      rows.length.toLocaleString("pt-BR");
+
+    totalEl.textContent =
+      formatBRL(total);
+
+    tipoResumo.textContent =
+      tipo === "fortes" ? "Fortes" : "BBGestaoMax";
+
+    unmatchedCountEl.textContent =
+      unmatched.length.toLocaleString("pt-BR");
+
+    summary.hidden = false;
+    tableWrap.hidden = false;
+
+    paginaAtual = 1;
+    renderPaginaTabela();
+  }
+
+  function gerarXLSX() {
+    if (!dados.length) return;
+
+    if (typeof XLSX === "undefined") {
+      setStatus(
+        "A biblioteca para gerar XLSX não foi carregada. Verifique a conexão com a internet e recarregue a página.",
+        "err"
+      );
+      return;
+    }
+
+    // IMPORTANTE:
+    // O NOME aparece na tela, mas NÃO é exportado para a planilha.
+    const aoa = [
+      ["CPF", "Agência com DV", "Conta com DV", "Valor"],
+      ...dados.map(r => [
+        r.cpf,
+        r.agencia,
+        r.conta,
+        r.valor
+      ])
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    ws["!cols"] = [
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 16 }
+    ];
+
+    // Preserva zeros à esquerda e dígito X.
+    for (let row = 2; row <= dados.length + 1; row++) {
+      for (const col of ["A", "B", "C"]) {
+        const cell = ws[`${col}${row}`];
+
+        if (cell) {
+          cell.t = "s";
+          cell.z = "@";
+        }
+      }
+
+      const valueCell = ws[`D${row}`];
+
+      if (valueCell) {
+        valueCell.t = "n";
+        valueCell.z = "#,##0.00";
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Folha BB");
+
+    const origem =
+      tipoArquivo.value === "fortes"
+        ? "Fortes"
+        : "BBGestaoMax";
+
+    const base = sanitizeFileName(
+      (arquivoAtual?.name || "Folha_BB")
+        .replace(/\.pdf$/i, "")
+    );
+
+    XLSX.writeFile(
+      wb,
+      `${base}_${origem}_planilha.xlsx`
+    );
+  }
+
+  function limparResultados(manterTipo = true) {
+    input.value = "";
+    dados = [];
+    arquivoAtual = null;
+    naoReconhecidasAtuais = [];
+    tbody.innerHTML = "";
+
+    summary.hidden = true;
+    tableWrap.hidden = true;
+    details.hidden = true;
+    debug.textContent = "";
+    paginaAtual = 1;
+    pagination.hidden = true;
+
+    xlsxBtn.disabled = true;
+    clearBtn.disabled = true;
+
+    if (!manterTipo) {
+      tipoArquivo.value = "";
+      input.disabled = true;
+      drop.classList.add("disabled");
+      layoutHelp.textContent =
+        "Selecione primeiro o tipo do arquivo.";
+      setStatus(
+        "Selecione o tipo do arquivo para começar."
+      );
+    } else {
+      const tipo = tipoArquivo.value;
+
+      if (tipo === "fortes") {
+        setStatus(
+          "Arquivo Fortes selecionado. Envie a Listagem de Conferência - Empregados/Pensões."
+        );
+      } else if (tipo === "bbgestaomax") {
+        setStatus(
+          "Arquivo BBGestaoMax selecionado. Envie a Autorização para Liberação dos Créditos."
+        );
+      }
+    }
+  }
+
+  tipoArquivo.addEventListener("change", () => {
+    limparResultados(true);
+
+    if (!tipoArquivo.value) {
+      input.disabled = true;
+      drop.classList.add("disabled");
+
+      layoutHelp.textContent =
+        "Selecione primeiro o tipo do arquivo.";
+
+      setStatus(
+        "Selecione o tipo do arquivo para começar."
+      );
+
+      return;
+    }
+
+    input.disabled = false;
+    drop.classList.remove("disabled");
+
+    if (tipoArquivo.value === "fortes") {
+      layoutHelp.textContent =
+        "Fortes: Listagem de Conferência - Empregados/Pensões.";
+      setStatus(
+        "Arquivo Fortes selecionado. Faça o upload do PDF."
+      );
+    } else {
+      layoutHelp.textContent =
+        "BBGestaoMax: Autorização para Liberação dos Créditos.";
+      setStatus(
+        "Arquivo BBGestaoMax selecionado. Faça o upload do PDF."
+      );
+    }
+  });
+
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+
+    if (file) {
+      processarPDF(file);
+    }
+  });
+
+  xlsxBtn.addEventListener("click", gerarXLSX);
+
+  clearBtn.addEventListener("click", () => {
+    limparResultados(true);
+  });
+
+  prevPageBtn.addEventListener("click", () => {
+    if (paginaAtual > 1) {
+      paginaAtual--;
+      renderPaginaTabela();
+    }
+  });
+
+  nextPageBtn.addEventListener("click", () => {
+    const totalPaginas = Math.max(1, Math.ceil(dados.length / ITENS_POR_PAGINA));
+
+    if (paginaAtual < totalPaginas) {
+      paginaAtual++;
+      renderPaginaTabela();
+    }
+  });
+
+  ["dragenter", "dragover"].forEach(evt => {
+    drop.addEventListener(evt, e => {
+      e.preventDefault();
+
+      if (!input.disabled) {
+        drop.classList.add("drag");
+      }
+    });
+  });
+
+  ["dragleave", "drop"].forEach(evt => {
+    drop.addEventListener(evt, e => {
+      e.preventDefault();
+      drop.classList.remove("drag");
+    });
+  });
+
+  drop.addEventListener("drop", e => {
+    if (input.disabled) {
+      setStatus(
+        "Selecione primeiro o tipo do arquivo.",
+        "warn"
+      );
+      return;
+    }
+
+    const file = e.dataTransfer?.files?.[0];
+
+    if (file &&
+        (file.type === "application/pdf" ||
+         file.name.toLowerCase().endsWith(".pdf"))) {
+      processarPDF(file);
+    } else {
+      setStatus(
+        "Selecione um arquivo PDF.",
+        "warn"
+      );
+    }
+  });
+</script>
+</body>
+</html>
