@@ -777,56 +777,52 @@
   // DOMÍNIO
   // Layout (Relação de Crédito em Conta):
   // Código | Nome | Cargo | C.Custo | CPF | Pix | Banco | Agência | Nº Conta | Dt. Pagto. | Valor
+  // Nome, Cargo e C.Custo são colunas distintas sem separador no texto
+  // corrido, então o único jeito confiável de isolar só o Nome é usar
+  // a posição de cada célula (items), igual ao parser do BBGestaoMax.
   // Pix/Banco/Agência/Nº Conta podem vir em branco quando o
   // colaborador não tem dados bancários cadastrados no sistema —
   // nesse caso a linha é tratada como não reconhecida, pois não há
   // como montar o registro de pagamento sem agência e conta.
   // ============================================================
 
-  function parseDominioLine(line) {
-    const texto = normalizeSpaces(line);
+  function parseDominioItems(items) {
+    const texts = items.map(i => i.text);
 
-    const cpfMatch = texto.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/);
-    if (!cpfMatch) return null;
+    const codigoIndex = texts.findIndex(t => /^\d{6}$/.test(t));
+    if (codigoIndex < 0) return null;
 
-    const dataMatch = texto.match(/\d{2}\/\d{2}\/\d{4}/);
-    const valorMatch = texto.match(/(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/);
-    if (!dataMatch || !valorMatch) return null;
-
-    const valor = parseBRL(valorMatch[1]);
-    if (valor === null) return null;
-
-    const cpf = cpfMatch[0];
-
-    // Código do empregado: 6 dígitos no início da linha.
-    const codigoMatch = texto.match(/^(\d{6})\s+(.*)$/);
-    if (!codigoMatch) return null;
-
-    const resto = codigoMatch[2];
-    const cpfPos = resto.indexOf(cpf);
-    if (cpfPos < 1) return null;
-
-    // Nome + Cargo + C.Custo vêm antes do CPF. As larguras das colunas
-    // variam de relatório para relatório, então tudo isso é mantido
-    // junto como "nome" só para conferência na tela.
-    const nome = normalizeSpaces(resto.slice(0, cpfPos));
+    // A célula logo após o Código é sempre o Nome — Cargo e C.Custo
+    // ficam em células seguintes e não entram no resultado.
+    const nome = normalizeSpaces(texts[codigoIndex + 1] || "");
     if (!nome) return null;
 
-    // Entre o CPF e a data de pagamento podem aparecer: Pix, Banco,
-    // Agência com DV e Nº Conta com DV — todos opcionais.
-    const dataPos = resto.indexOf(dataMatch[0], cpfPos);
-    const meio = dataPos > -1
-      ? resto.slice(cpfPos + cpf.length, dataPos)
-      : resto.slice(cpfPos + cpf.length);
+    const cpfIndex = texts.findIndex(t => /^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(t));
+    if (cpfIndex < 0) return null;
 
-    const tokens = normalizeSpaces(meio).split(" ").filter(Boolean);
+    const cpf = texts[cpfIndex];
 
-    const agenciaTok = tokens.find(t => /^\d{1,6}-[0-9Xx]$/.test(t));
-    const contaTok = tokens.find(
+    const after = texts
+      .slice(cpfIndex + 1)
+      .map(normalizeSpaces)
+      .filter(Boolean);
+
+    // Limita a busca de Agência/Conta ao trecho antes da Dt. Pagto.,
+    // evitando confundir com algo parecido mais adiante na linha.
+    const dataIndex = after.findIndex(t => /^\d{2}\/\d{2}\/\d{4}$/.test(t));
+    const janela = dataIndex > -1 ? after.slice(0, dataIndex) : after;
+
+    const agenciaTok = janela.find(t => /^\d{1,6}-[0-9Xx]$/.test(t));
+    const contaTok = janela.find(
       t => /^\d{1,12}-[0-9Xx]$/.test(t) && t !== agenciaTok
     );
 
-    if (!agenciaTok || !contaTok) return null;
+    const valorTxt = [...after].reverse().find(t => /^[\d.]+,\d{2}$/.test(t));
+
+    if (!agenciaTok || !contaTok || !valorTxt) return null;
+
+    const valor = parseBRL(valorTxt);
+    if (valor === null) return null;
 
     return {
       nome,
@@ -936,7 +932,7 @@
 
             if (!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(line.text)) continue;
 
-            const row = parseDominioLine(line.text);
+            const row = parseDominioItems(line.items);
 
             if (row) {
               row.pagina = p;
