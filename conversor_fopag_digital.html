@@ -406,6 +406,7 @@
           <option value="">Selecione...</option>
           <option value="bbgestaomax">Arquivo BBGestaoMax</option>
           <option value="fortes">Arquivo Fortes</option>
+          <option value="dominio">Arquivo Domínio</option>
         </select>
       </div>
 
@@ -511,6 +512,12 @@
   const pageInfo = document.getElementById("pageInfo");
 
   const ITENS_POR_PAGINA = 50;
+
+  const TIPO_LABELS = {
+    fortes: "Fortes",
+    bbgestaomax: "BBGestaoMax",
+    dominio: "Domínio"
+  };
 
   let dados = [];
   let arquivoAtual = null;
@@ -767,6 +774,70 @@
   }
 
   // ============================================================
+  // DOMÍNIO
+  // Layout (Relação de Crédito em Conta):
+  // Código | Nome | Cargo | C.Custo | CPF | Pix | Banco | Agência | Nº Conta | Dt. Pagto. | Valor
+  // Pix/Banco/Agência/Nº Conta podem vir em branco quando o
+  // colaborador não tem dados bancários cadastrados no sistema —
+  // nesse caso a linha é tratada como não reconhecida, pois não há
+  // como montar o registro de pagamento sem agência e conta.
+  // ============================================================
+
+  function parseDominioLine(line) {
+    const texto = normalizeSpaces(line);
+
+    const cpfMatch = texto.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/);
+    if (!cpfMatch) return null;
+
+    const dataMatch = texto.match(/\d{2}\/\d{2}\/\d{4}/);
+    const valorMatch = texto.match(/(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/);
+    if (!dataMatch || !valorMatch) return null;
+
+    const valor = parseBRL(valorMatch[1]);
+    if (valor === null) return null;
+
+    const cpf = cpfMatch[0];
+
+    // Código do empregado: 6 dígitos no início da linha.
+    const codigoMatch = texto.match(/^(\d{6})\s+(.*)$/);
+    if (!codigoMatch) return null;
+
+    const resto = codigoMatch[2];
+    const cpfPos = resto.indexOf(cpf);
+    if (cpfPos < 1) return null;
+
+    // Nome + Cargo + C.Custo vêm antes do CPF. As larguras das colunas
+    // variam de relatório para relatório, então tudo isso é mantido
+    // junto como "nome" só para conferência na tela.
+    const nome = normalizeSpaces(resto.slice(0, cpfPos));
+    if (!nome) return null;
+
+    // Entre o CPF e a data de pagamento podem aparecer: Pix, Banco,
+    // Agência com DV e Nº Conta com DV — todos opcionais.
+    const dataPos = resto.indexOf(dataMatch[0], cpfPos);
+    const meio = dataPos > -1
+      ? resto.slice(cpfPos + cpf.length, dataPos)
+      : resto.slice(cpfPos + cpf.length);
+
+    const tokens = normalizeSpaces(meio).split(" ").filter(Boolean);
+
+    const agenciaTok = tokens.find(t => /^\d{1,6}-[0-9Xx]$/.test(t));
+    const contaTok = tokens.find(
+      t => /^\d{1,12}-[0-9Xx]$/.test(t) && t !== agenciaTok
+    );
+
+    if (!agenciaTok || !contaTok) return null;
+
+    return {
+      nome,
+      cpf,
+      agencia: normalizarAgencia(agenciaTok),
+      conta: normalizarConta(contaTok),
+      valor
+    };
+  }
+
+  // ============================================================
   // PROCESSAMENTO
   // ============================================================
 
@@ -799,6 +870,7 @@
 
       let esperadoFortesQtd = null;
       let esperadoFortesTotal = null;
+      let esperadoDominioTotal = null;
 
       for (let p = 1; p <= pdf.numPages; p++) {
         setStatus(`Lendo página ${p} de ${pdf.numPages}...`);
@@ -842,6 +914,29 @@
             if (!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(line.text)) continue;
 
             const row = parseFortesLine(line.text);
+
+            if (row) {
+              row.pagina = p;
+              encontrados.push(row);
+            } else {
+              naoReconhecidas.push({
+                pagina: p,
+                texto: line.text
+              });
+            }
+          }
+
+          if (tipo === "dominio") {
+            const totalGeral =
+              line.text.match(/Total\s+Geral:?\s*([\d.]+,\d{2})/i);
+
+            if (totalGeral) {
+              esperadoDominioTotal = parseBRL(totalGeral[1]);
+            }
+
+            if (!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(line.text)) continue;
+
+            const row = parseDominioLine(line.text);
 
             if (row) {
               row.pagina = p;
@@ -910,6 +1005,19 @@
         } else {
           mensagem +=
             ` ATENÇÃO: o rodapé informa ${esperadoFortesQtd} empregados / ${formatBRL(esperadoFortesTotal)}, mas a extração resultou em ${dados.length} / ${formatBRL(total)}.`;
+          classe = "warn";
+        }
+      }
+
+      if (tipo === "dominio" && esperadoDominioTotal !== null) {
+        const totalOk = Math.abs(total - esperadoDominioTotal) < 0.01;
+
+        if (totalOk) {
+          mensagem +=
+            ` Conferência Domínio OK: total bate com o rodapé (${formatBRL(esperadoDominioTotal)}).`;
+        } else {
+          mensagem +=
+            ` ATENÇÃO: o rodapé informa total de ${formatBRL(esperadoDominioTotal)}, mas a extração resultou em ${formatBRL(total)}.`;
           classe = "warn";
         }
       }
@@ -993,7 +1101,7 @@
       formatBRL(total);
 
     tipoResumo.textContent =
-      tipo === "fortes" ? "Fortes" : "BBGestaoMax";
+      TIPO_LABELS[tipo] || tipo;
 
     unmatchedCountEl.textContent =
       unmatched.length.toLocaleString("pt-BR");
@@ -1059,10 +1167,7 @@
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Folha BB");
 
-    const origem =
-      tipoArquivo.value === "fortes"
-        ? "Fortes"
-        : "BBGestaoMax";
+    const origem = TIPO_LABELS[tipoArquivo.value] || "Folha";
 
     const base = sanitizeFileName(
       (arquivoAtual?.name || "Folha_BB")
@@ -1112,6 +1217,10 @@
         setStatus(
           "Arquivo BBGestaoMax selecionado. Envie a Autorização para Liberação dos Créditos."
         );
+      } else if (tipo === "dominio") {
+        setStatus(
+          "Arquivo Domínio selecionado. Envie a Relação de Crédito em Conta."
+        );
       }
     }
   }
@@ -1141,6 +1250,12 @@
         "Fortes: Listagem de Conferência - Empregados/Pensões.";
       setStatus(
         "Arquivo Fortes selecionado. Faça o upload do PDF."
+      );
+    } else if (tipoArquivo.value === "dominio") {
+      layoutHelp.textContent =
+        "Domínio: Relação de Crédito em Conta.";
+      setStatus(
+        "Arquivo Domínio selecionado. Faça o upload do PDF."
       );
     } else {
       layoutHelp.textContent =
